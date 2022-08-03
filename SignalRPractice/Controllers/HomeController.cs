@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using SignalRPractice.Models;
 using System;
@@ -15,13 +16,15 @@ namespace SignalRPractice.Controllers
         private readonly ILogger<HomeController> _logger;
         private readonly UserManager<AppUser> _userManager;
         private readonly SignInManager<AppUser> _signInManager;
+        private readonly IHubContext<ChatHub> _hubContext;
 
 
-        public HomeController(ILogger<HomeController> logger, UserManager<AppUser> userManager, SignInManager<AppUser> signInManager)
+        public HomeController(ILogger<HomeController> logger, UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, IHubContext<ChatHub> hubContext)
         {
             _logger = logger;
             _userManager = userManager;
             _signInManager = signInManager;
+            _hubContext = hubContext;
         }
 
         public IActionResult Index()
@@ -42,7 +45,8 @@ namespace SignalRPractice.Controllers
 
         public IActionResult Chat()
         {
-            return View();
+            List<AppUser> users = _userManager.Users.ToList();
+            return View(users);
         }
 
         public async Task< IActionResult> CreateUser()
@@ -64,14 +68,19 @@ namespace SignalRPractice.Controllers
         {
             var user = _userManager.FindByNameAsync(model.Username).Result;
             var result = await _signInManager.PasswordSignInAsync(user, model.Password, true, true);
-            return RedirectToAction("Index");
-
+            return RedirectToAction("chat");
         }
         public IActionResult Logout()
         {
             _signInManager.SignOutAsync();
-            return RedirectToAction("Index");
+            return RedirectToAction("login");
         }
 
+        public async Task<IActionResult> PrivateSend(string id)
+        {
+            AppUser appUser = await _userManager.FindByIdAsync(id);
+            await _hubContext.Clients.Client(appUser.ConnectId).SendAsync("PrivateMessage");
+            return RedirectToAction("chat");
+        }
     }
 }
